@@ -9,15 +9,39 @@ const taskList = document.querySelector('.task-list');
 const resolvedTaskList = document.querySelector('.resolved__tasks-list');
 const sortBtn = document.querySelector('.header__sort-btn');
 
+
+let currentTab = 'freeTime';
+const drawerItems = document.querySelectorAll('.todo__drawer-item');
+
 // Variables arrays
 let tasks = [];
 let doneTasks = [];
 
-document.addEventListener('DOMContentLoaded', () => {
-  const savedTasks = parseDataToLocalStorage('tasks') ?? [];
-  const savedDoneTasks = parseDataToLocalStorage('doneTasks') ?? [];
+const data = {
+  freeTime: {
+    tasks: [],
+    doneTasks: [],
+  },
+  workTime: {
+    tasks: [],
+    doneTasks: [],
+  },
+};
 
-  [tasks, doneTasks] = [savedTasks, savedDoneTasks];
+let currentTabData = data[currentTab];
+
+document.addEventListener('DOMContentLoaded', renderTaskList);
+
+function renderTaskList() {
+  const allTasks = document.querySelectorAll('.main__list-item');
+  allTasks.forEach(element => {
+    element.remove();
+  });
+
+  const tasksFromLS = parseDataToLocalStorage() ?? data;
+  const { tasks, doneTasks } = tasksFromLS[currentTab];
+
+  [currentTab.tasks, currentTab.doneTasks] = [tasks, doneTasks];
 
   tasks.forEach((element) => {
     renderSimpleTask(element);
@@ -26,14 +50,14 @@ document.addEventListener('DOMContentLoaded', () => {
   doneTasks.forEach((element) => {
     renderReadyTask(element);
   });
-});
-
-function setDataToLocalStorage(type, arr) {
-  localStorage.setItem(`${type}`, JSON.stringify(arr));
 }
 
-function parseDataToLocalStorage(type, arr) {
-  return JSON.parse(localStorage.getItem(type));
+function setDataToLocalStorage() {
+  localStorage.setItem('data', JSON.stringify(data));
+}
+
+function parseDataToLocalStorage() {
+  return JSON.parse(localStorage.getItem('data'));
 }
 
 createTaskBtn.addEventListener('click', createTaskBtn);
@@ -44,22 +68,25 @@ function doneTask(target) {
   if (!task) return;
 
   const taskId = task.dataset.id;
-  const indexTaskToDone = tasks.findIndex((el) => el.id == taskId);
-  if (indexTaskToDone === -1) return;
 
-  // Убираем из списка активных, добавляем в выполненные
-  const doneTask = tasks.splice(indexTaskToDone, 1)[0];
-  doneTasks.push(doneTask);
+  // Найдем задачу по id в текущем списке задач
+  const taskToDoneIndex = currentTabData.tasks.findIndex((el) => el.id == taskId);
+  if (taskToDoneIndex === -1) return;
 
-  // Удаляем из списка активных
-  task.remove();
+  // Перемещаем задачу в выполненные
+  const doneTask = currentTabData.tasks.splice(taskToDoneIndex, 1)[0];
+  doneTask.isChecked = true;  // Помечаем задачу как выполненную
+
+  currentTabData.doneTasks.push(doneTask);
   
-  // Ререндерим в выполненные
+  // Удаляем задачу из списка активных
+  task.remove();
+
+  // Ререндерим выполненную задачу в блок выполненных
   renderReadyTask(doneTask);
 
   // Обновляем данные в localStorage
-  setDataToLocalStorage('tasks', tasks);
-  setDataToLocalStorage('doneTasks', doneTasks);
+  setDataToLocalStorage();
 }
 
 // Функция для удаления задач
@@ -67,13 +94,8 @@ function deleteTask(target, typeTasks) {
   const taskToDelete = target.closest('.main__list-item');
   taskToDelete.remove();
 
-  if (typeTasks == 'doneTasks') {
-    doneTasks = doneTasks.filter((el) => el.id != taskToDelete.dataset.id);
-    setDataToLocalStorage('doneTasks', doneTasks);
-  } else {
-    tasks = tasks.filter((el) => el.id != taskToDelete.dataset.id);
-    setDataToLocalStorage('tasks', tasks);
-  }
+  currentTabData[typeTasks] = currentTabData[typeTasks].filter(el => el.id !== taskToDelete.dataset.id);
+  setDataToLocalStorage();
 }
 
 // Важность задачи
@@ -81,15 +103,16 @@ function makeImportantTask(target) {
   const taskToImportant = target.closest('.main__list-item');
   const taskId = taskToImportant.dataset.id;
   const star = taskToImportant.querySelector('.star-important');
-  star.classList.toggle('star-important-checked');
-  tasks = tasks.map((task) => {
+  currentTabData.tasks = currentTabData.tasks.map((task) => {
     if (task.id == taskId) {
       task.isImportant = !task.isImportant;
     }
     return task;
   });
 
-  setDataToLocalStorage('tasks', tasks);
+  star.classList.toggle('star-important-checked');
+
+  setDataToLocalStorage();
 }
 
 // Функция для создания задач
@@ -110,15 +133,15 @@ function createTask() {
     isImportant: false,
     isChecked: false
   };
-  
+
   renderSimpleTask(task);
 
   createTaskInput.value = '';
   createTaskInput.focus(); // Обновляем Input
 
-  tasks.push(task);
+  currentTabData.tasks.push(task);
 
-  setDataToLocalStorage('tasks', tasks);
+  setDataToLocalStorage();
 }
 
 createTaskBtn.addEventListener('click', createTask);
@@ -130,11 +153,10 @@ clearBtn.addEventListener('click', () => {
     element.remove();
   });
 
-  tasks = [];
-  doneTasks = [];
+  currentTabData.tasks = [];
+  currentTabData.doneTasks = [];
 
-  setDataToLocalStorage('tasks', []);
-  setDataToLocalStorage('doneTasks', []);
+  setDataToLocalStorage();
 });
 
 sortBtn.addEventListener('click', (element) => {
@@ -143,12 +165,12 @@ sortBtn.addEventListener('click', (element) => {
     element.remove();
   });
 
-  tasks.reverse();
-  tasks.forEach((element) => {
-    renderSimpleTask(element);         
+  currentTabData.tasks.reverse();
+  currentTabData.tasks.forEach((element) => {
+    renderSimpleTask(element);
   });
 
-  setDataToLocalStorage('tasks', tasks);
+  setDataToLocalStorage();
 });
 
 function renderSimpleTask(element) {
@@ -172,7 +194,7 @@ function renderSimpleTask(element) {
                       />
                     </svg>
                     <svg
-                      onClick="deleteTask(this)"
+                      onClick="deleteTask(this, 'tasks')"
                       class="cross-err-btn"
                       width="800px"
                       height="800px"
@@ -187,7 +209,7 @@ function renderSimpleTask(element) {
                   </div>
                 </div>
               `;
-    taskList.insertAdjacentHTML('beforeend', taskComponent);
+  taskList.insertAdjacentHTML('beforeend', taskComponent);
 }
 
 function renderReadyTask(element) {
@@ -211,8 +233,16 @@ function renderReadyTask(element) {
             </div>
         </div>`;
 
-    resolvedTaskList.insertAdjacentHTML('beforeend', taskComponent);
+  resolvedTaskList.insertAdjacentHTML('beforeend', taskComponent);
 }
+
+drawerItems.forEach(item => {
+  item.addEventListener('click', () => {
+    currentTab = item.dataset.type;
+    currentTabData = data[currentTab];
+    renderTaskList();
+  });
+});
 
 // При нажатии Enter задачка добавляется
 createTaskInput.addEventListener('keydown', (e) => {
@@ -220,3 +250,4 @@ createTaskInput.addEventListener('keydown', (e) => {
     createTask();
   }
 });
+
